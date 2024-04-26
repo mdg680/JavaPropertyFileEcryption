@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -18,15 +19,17 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class PropertiesEncryption {
 
-    public void encryptFile(Path path, List<String> properties) {
+    public void encryptFile(Path path, List<String> properties) throws InvalidKeySpecException {
         try {
             HashMap<String, String> propertiesFromFile = loadPropertiesFromFile(path);
             HashMap<String, String> encryptedProperties = encrypt(propertiesFromFile, properties);
-            HashMap<String, String> decryptedProperties = decrypt(propertiesFromFile, properties);
             writePropertiesToFile(path, encryptedProperties);
         } catch (IOException e ) {
             e.printStackTrace();  
@@ -37,7 +40,7 @@ public class PropertiesEncryption {
         }
     }
 
-    public void encryptFile(String filePath, List<String> properties) {
+    public void encryptFile(String filePath, List<String> properties) throws InvalidKeySpecException {
         encryptFile(Path.of(filePath), properties);
     }
 
@@ -51,6 +54,8 @@ public class PropertiesEncryption {
         } catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) {
             e.printStackTrace();
         } catch (IllegalBlockSizeException | BadPaddingException e) {
+            e.printStackTrace();
+        } catch (InvalidKeySpecException e) {
             e.printStackTrace();
         }
     }
@@ -80,23 +85,32 @@ public class PropertiesEncryption {
         }
     }
 
-    private SecretKeySpec getSecretKey() {
-        String password = "hellodfgdgdfgdgd"; //TODO: Don't hardcode
+    private SecretKeySpec getSecretKey() throws InvalidKeySpecException, NoSuchAlgorithmException {
+        char[] password = System.getProperty("PropertyPassword").toCharArray();
         if (password == null) {
             throw new IllegalArgumentException("'-DPropertyPassword' not set");
         }
-        return new SecretKeySpec(password.getBytes(), "AES");
+
+        int keyLength = 256;
+        int iterationCount = 100;
+        byte[] salt = "basecaresalt".getBytes(); // This can be whatever, here it is primarily used to generate a valid AES key from password input
+
+        SecretKeyFactory keyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512");
+        PBEKeySpec keySpec = new PBEKeySpec(password, salt, iterationCount, keyLength);
+        SecretKey keyTmp = keyFactory.generateSecret(keySpec);
+
+        return new SecretKeySpec(keyTmp.getEncoded(), "AES");
     }
 
     private HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
-        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, 
-                IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException {
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
+                BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
         SecretKeySpec secretKeySpec = getSecretKey();
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec);
 
-        HashMap<String, String> result = propertiesFromFile;
+        HashMap<String, String> result = new HashMap<String, String>(propertiesFromFile);
 
         for(String entry : properties) {
             if (!isEncrypted(result.get(entry))) {
@@ -111,14 +125,14 @@ public class PropertiesEncryption {
     }
 
     private HashMap<String, String> decrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
-        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, 
-                IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException {
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
+                BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
         SecretKeySpec secretKeySpec = getSecretKey();
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, secretKeySpec);
 
-        HashMap<String, String> result = propertiesFromFile;
+        HashMap<String, String> result = new HashMap<String, String>(propertiesFromFile);
 
         for(String entry : properties) {
             if (isEncrypted(result.get(entry))) {
