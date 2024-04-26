@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 
@@ -25,7 +26,8 @@ public class PropertiesEncryption {
         try {
             HashMap<String, String> propertiesFromFile = loadPropertiesFromFile(path);
             HashMap<String, String> encryptedProperties = encrypt(propertiesFromFile, properties);
-            writeFile(path, encryptedProperties);
+            HashMap<String, String> decryptedProperties = decrypt(propertiesFromFile, properties);
+            writePropertiesToFile(path, encryptedProperties);
         } catch (IOException e ) {
             e.printStackTrace();  
         } catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) {
@@ -33,14 +35,35 @@ public class PropertiesEncryption {
         } catch (IllegalBlockSizeException | BadPaddingException e) {
             e.printStackTrace();
         }
-        
     }
 
-    public void encryptFile(String path, List<String> properties) {
-        encryptFile(Path.of(path), properties);
+    public void encryptFile(String filePath, List<String> properties) {
+        encryptFile(Path.of(filePath), properties);
     }
 
-    private void writeFile(Path path, HashMap<String, String> encryptedProperties) {
+    public void decryptFile(Path path, List<String> properties) {
+        try {
+            HashMap<String, String> propertiesFromFile = loadPropertiesFromFile(path);
+            HashMap<String, String> decryptedProperties = decrypt(propertiesFromFile, properties);
+            writePropertiesToFile(path, decryptedProperties);
+        } catch (IOException e ) {
+            e.printStackTrace();  
+        } catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) {
+            e.printStackTrace();
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void decryptFile(String filePath, List<String> properties) {
+        decryptFile(Path.of(filePath), properties);
+    }
+
+    public String getPropertyFrom(Path filePath, String propertyName) throws IOException {
+        return loadPropertiesFromFile(filePath).get(propertyName);
+    }
+
+    private void writePropertiesToFile(Path path, HashMap<String, String> encryptedProperties) {
         File file =  path.toFile();
         file.delete();
 
@@ -55,17 +78,21 @@ public class PropertiesEncryption {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        throw new UnsupportedOperationException("Unimplemented method 'write'");
     }
 
-    private HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
-            throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, 
-                   IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException {
-        String password = System.getProperty("PropertiesPassword");
+    private SecretKeySpec getSecretKey() {
+        String password = "hellodfgdgdfgdgd"; //TODO: Don't hardcode
         if (password == null) {
             throw new IllegalArgumentException("'-DPropertyPassword' not set");
         }
-        SecretKeySpec secretKeySpec = new SecretKeySpec(password.getBytes(), password);
+        return new SecretKeySpec(password.getBytes(), "AES");
+    }
+
+    private HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, 
+                IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException {
+        
+        SecretKeySpec secretKeySpec = getSecretKey();
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec);
 
@@ -73,8 +100,35 @@ public class PropertiesEncryption {
 
         for(String entry : properties) {
             if (!isEncrypted(result.get(entry))) {
-                var new_val = cipher.doFinal(result.get(entry).getBytes("UTF-8"));
-                result.put(entry, new String(new_val, StandardCharsets.UTF_8));
+                
+                byte[] encryptedValue = cipher.doFinal(result.get(entry).getBytes("UTF-8"));
+                String base64Value = Base64.getEncoder().encodeToString(encryptedValue);
+              
+                result.put(entry, "enc#" + base64Value);
+            }
+        }
+        return result;
+    }
+
+    private HashMap<String, String> decrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+        throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, 
+                IllegalBlockSizeException, BadPaddingException, UnsupportedEncodingException {
+        
+        SecretKeySpec secretKeySpec = getSecretKey();
+        Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, secretKeySpec);
+
+        HashMap<String, String> result = propertiesFromFile;
+
+        for(String entry : properties) {
+            if (isEncrypted(result.get(entry))) {
+                
+                String base64EncryptedValue = result.get(entry).replace("enc#", ""); //.split("#")[1]; // we only want the clean base64 string ie. [1] without prefix before conversion
+                byte[] encryptedValueInBytes = Base64.getDecoder().decode(base64EncryptedValue);
+                byte[] decryptedValueInBytes = cipher.doFinal(encryptedValueInBytes);
+                String decryptedValue = new String(decryptedValueInBytes, StandardCharsets.UTF_8);
+
+                result.put(entry, decryptedValue);
             }
         }
         return result;
@@ -92,6 +146,6 @@ public class PropertiesEncryption {
     }
 
     private boolean isEncrypted(String propertiesEntry) {
-        return propertiesEntry.matches("enc\\([a-zA-Z0-9]+\\)");
+        return propertiesEntry.startsWith("enc#");
     }
 }
