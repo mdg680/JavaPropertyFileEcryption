@@ -95,10 +95,6 @@ public class PropertiesEncryption {
         decryptFile(Path.of(filePath), properties);
     }
 
-    public String getPropertyFrom(Path filePath, String propertyName) throws IOException {
-        return loadPropertiesFromFile(filePath).get(propertyName);
-    }
-
     private void writePropertiesToFile(Path path, HashMap<String, String> encryptedProperties) {
         File file =  path.toFile();
         file.delete();
@@ -151,7 +147,7 @@ public class PropertiesEncryption {
      * @throws UnsupportedEncodingException
      * @throws InvalidKeySpecException
      */
-    private HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+    public HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
         throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
                 BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
@@ -186,7 +182,7 @@ public class PropertiesEncryption {
      * @throws UnsupportedEncodingException
      * @throws InvalidKeySpecException
      */
-    private HashMap<String, String> decrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+    public HashMap<String, String> decrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
         throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
                 BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
@@ -216,7 +212,7 @@ public class PropertiesEncryption {
      * @return HashMap with properties as key, value pairs.
      * @throws IOException
      */
-    private HashMap<String, String> loadPropertiesFromFile(Path path) throws IOException {
+    public HashMap<String, String> loadPropertiesFromFile(Path path) throws IOException {
         HashMap<String, String> result = new HashMap<>();
         for (String entry : Files.readAllLines(path)) {
             String [] keyValuePair = entry.split("=");
