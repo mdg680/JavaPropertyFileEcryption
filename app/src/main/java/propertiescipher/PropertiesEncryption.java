@@ -54,7 +54,7 @@ public class PropertiesEncryption {
     /**
      * Encrypts properties in file, format of property key, value pairs uses '=' as delimeter
      * ie. key=value
-     * @param path path to file to be encrypted
+     * @param filePath path to file to be encrypted
      * @param properties properties to encrypt in file
      * @throws InvalidKeySpecException
      */
@@ -88,7 +88,7 @@ public class PropertiesEncryption {
     /**
      * decrypts properties in file, format of property key, value pairs uses '=' as delimeter
      * ie. key=value
-     * @param path path to file to be encrypted
+     * @param filePath path to file to be encrypted
      * @param properties properties to encrypt in file
      * @throws InvalidKeySpecException
      */
