@@ -11,10 +11,10 @@ import java.nio.file.Path;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.Properties;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -39,8 +39,8 @@ public class PropertiesEncryption {
      */
     public void encryptFile(Path path, List<String> properties) throws InvalidKeySpecException {
         try {
-            HashMap<String, String> propertiesFromFile = loadPropertiesFromFile(path);
-            HashMap<String, String> encryptedProperties = encrypt(propertiesFromFile, properties);
+            Properties propertiesFromFile = loadPropertiesFromFile(path);
+            Properties encryptedProperties = encrypt(propertiesFromFile, properties);
             writePropertiesToFile(path, encryptedProperties);
         } catch (IOException e ) {
             e.printStackTrace();  
@@ -59,7 +59,7 @@ public class PropertiesEncryption {
      * @throws InvalidKeySpecException
      */
     public void encryptFile(String filePath, List<String> properties) throws InvalidKeySpecException {
-        encryptFile(Path.of(filePath), properties);
+        encryptFile(Path.get(filePath), properties);
     }
 
     /**
@@ -71,8 +71,8 @@ public class PropertiesEncryption {
      */
     public void decryptFile(Path path, List<String> properties) {
         try {
-            HashMap<String, String> propertiesFromFile = loadPropertiesFromFile(path);
-            HashMap<String, String> decryptedProperties = decrypt(propertiesFromFile, properties);
+            Properties propertiesFromFile = loadPropertiesFromFile(path);
+            Properties decryptedProperties = decrypt(propertiesFromFile, properties);
             writePropertiesToFile(path, decryptedProperties);
         } catch (IOException e ) {
             e.printStackTrace();  
@@ -93,16 +93,19 @@ public class PropertiesEncryption {
      * @throws InvalidKeySpecException
      */
     public void decryptFile(String filePath, List<String> properties) {
-        decryptFile(Path.of(filePath), properties);
+        decryptFile(Path.get(filePath), properties);
     }
 
-    private void writePropertiesToFile(Path path, HashMap<String, String> encryptedProperties) {
+    private void writePropertiesToFile(Path path, Properties properties) {
         File file = path.toFile();
         file.delete();
 
         try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file))) {
-            for (HashMap.Entry<String, String> entry : encryptedProperties.entrySet()) {
-                String line = String.join("=", entry.getKey(), entry.getValue());
+            for (Entry<Object, Object> entry : properties.entrySet()) {
+                String line = String.join(
+                    "=", 
+                    entry.getKey().toString(), 
+                    entry.getValue().toString());
                 bufferedWriter.write(line);
                 bufferedWriter.newLine();
             }
@@ -137,9 +140,9 @@ public class PropertiesEncryption {
 
     /**
      * 
-     * @param propertiesFromFile properties loaded into a hashmap from a file
-     * @param properties properties set marked encryption
-     * @return HashMap of properties, with marked properties encrypted
+     * @param properties properties loaded into a hashmap from a file
+     * @param targetProperties properties set marked encryption
+     * @return Properties object with marked properties encrypted
      * @throws NoSuchAlgorithmException
      * @throws NoSuchPaddingException
      * @throws InvalidKeyException
@@ -148,7 +151,7 @@ public class PropertiesEncryption {
      * @throws UnsupportedEncodingException
      * @throws InvalidKeySpecException
      */
-    public HashMap<String, String> encrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+    public Properties encrypt(Properties properties, List<String> targetProperties) 
         throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
                 BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
@@ -156,12 +159,11 @@ public class PropertiesEncryption {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec);
 
-        HashMap<String, String> result = new HashMap<String, String>(propertiesFromFile);
+        Properties result = properties;
 
-        for(String entry : properties) {
-            if (!isEncrypted(result.get(entry))) {
-                
-                byte[] encryptedValue = cipher.doFinal(result.get(entry).getBytes("UTF-8"));
+        for(String entry : targetProperties) {
+            if (!isEncrypted(result.getProperty(entry))) {
+                byte[] encryptedValue = cipher.doFinal(result.getProperty(entry).getBytes("UTF-8"));
                 String base64Value = Base64.getEncoder().encodeToString(encryptedValue);
               
                 result.put(entry, "enc#" + base64Value);
@@ -172,9 +174,9 @@ public class PropertiesEncryption {
 
     /**
      * 
-     * @param propertiesFromFile properties loaded into a hashmap from a file
-     * @param properties properties set marked decryption
-     * @return HashMap of properties, with marked properties decrypted
+     * @param properties properties loaded into a hashmap from a file
+     * @param targetProperties properties set marked decryption
+     * @return Properties object, with marked properties decrypted
      * @throws NoSuchAlgorithmException
      * @throws NoSuchPaddingException
      * @throws InvalidKeyException
@@ -183,7 +185,7 @@ public class PropertiesEncryption {
      * @throws UnsupportedEncodingException
      * @throws InvalidKeySpecException
      */
-    public HashMap<String, String> decrypt(HashMap<String, String> propertiesFromFile, List<String> properties) 
+    public Properties decrypt(Properties properties, List<String> targetProperties) 
         throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, 
                 BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
         
@@ -191,12 +193,12 @@ public class PropertiesEncryption {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, secretKeySpec);
 
-        HashMap<String, String> result = new HashMap<String, String>(propertiesFromFile);
+        Properties result = properties;
 
-        for(String entry : properties) {
-            if (isEncrypted(result.get(entry))) {
+        for(String entry : targetProperties) {
+            if (isEncrypted(result.getProperty(entry))) {
                 
-                String base64EncryptedValue = result.get(entry).replace("enc#", "");
+                String base64EncryptedValue = result.get(entry).toString().replace("enc#", "");
                 byte[] encryptedValueInBytes = Base64.getDecoder().decode(base64EncryptedValue);
                 byte[] decryptedValueInBytes = cipher.doFinal(encryptedValueInBytes);
                 String decryptedValue = new String(decryptedValueInBytes, StandardCharsets.UTF_8);
@@ -210,35 +212,16 @@ public class PropertiesEncryption {
     /**
      * Loads properties from file into HashMap
      * @param path
-     * @return HashMap with properties as key, value pairs.
+     * @return Properties object.
      * @throws IOException
      */
-    public HashMap<String, String> loadPropertiesFromFile(Path path) throws IOException {
-        HashMap<String, String> result = new HashMap<>();
+    public Properties loadPropertiesFromFile(Path path) throws IOException {
+        Properties result = new Properties();
         for (String entry : Files.readAllLines(path)) {
             String [] keyValuePair = entry.split("=");
             String key = keyValuePair[0], value = keyValuePair[1];
             result.put(key, value);
         }
-
-        return result;
-    }
-
-    public String getPropertyFromFile(String propertyKey, Path filePath) 
-        throws IOException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, 
-                IllegalBlockSizeException, BadPaddingException, InvalidKeySpecException {
-        
-        HashMap<String, String> properties = loadPropertiesFromFile(filePath);
-
-        return getPropertyFromPropertiesList(propertyKey, properties);
-    }
-
-    public String getPropertyFromPropertiesList(String propertyKey, HashMap<String, String> properties) 
-        throws InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, 
-                BadPaddingException, UnsupportedEncodingException, InvalidKeySpecException {
-        List<String> markedProperties = new ArrayList<String>();
-        markedProperties.add(propertyKey);
-        String result = decrypt(properties, markedProperties).get(propertyKey);
 
         return result;
     }
